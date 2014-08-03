@@ -62,7 +62,7 @@ $(function(){
     var width = canvas.width;
     var height = canvas.height;
 
-    var circlesCount = 7; // мы нарисуем 7 окружностей
+    var circlesCount = 15; // мы нарисуем 7 окружностей
     for (var i=0; i<circlesCount; i++) {
         var x = Math.random()*width;
         var y = Math.random()*height;
