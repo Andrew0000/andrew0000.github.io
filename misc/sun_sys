@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Solar System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: #111827; /* Tailwind gray-900 */
+            color: #f3f4f6; /* Tailwind gray-100 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent scrollbars from canvas temporarily exceeding viewport */
+        }
+        canvas {
+            display: block;
+            background-color: #000000;
+            border-radius: 0.5rem; /* Tailwind rounded-lg */
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+        .controls {
+            margin-top: 1.5rem; /* Tailwind mt-6 */
+            padding: 1.5rem; /* Tailwind p-6 */
+            background-color: #1f2937; /* Tailwind gray-800 */
+            border-radius: 0.5rem; /* Tailwind rounded-lg */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Tailwind shadow-md */
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* Tailwind gap-4 */
+            width: 90%;
+            max-width: 600px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* Tailwind gap-3 */
+        }
+        .control-group label {
+            min-width: 100px; /* Ensure labels align */
+            font-weight: 500; /* Tailwind font-medium */
+        }
+        .control-group input[type="range"] {
+            flex-grow: 1;
+            cursor: pointer;
+            accent-color: #3b82f6; /* Tailwind blue-500 */
+        }
+        .control-group span {
+            min-width: 30px; /* Space for value */
+            text-align: right;
+        }
+        h1 {
+            font-size: 1.875rem; /* Tailwind text-3xl */
+            font-weight: 700; /* Tailwind font-bold */
+            margin-top: 1.5rem; /* Tailwind mt-6 */
+            margin-bottom: 1rem; /* Tailwind mb-4 */
+            color: #60a5fa; /* Tailwind blue-400 */
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive Solar System</h1>
+
+    <canvas id="solarSystemCanvas"></canvas>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="scaleSlider">Scale:</label>
+            <input type="range" id="scaleSlider" min="0.2" max="2.5" value="1" step="0.05">
+            <span id="scaleValue">1.00x</span>
+        </div>
+        <div class="control-group">
+            <label for="speedSlider">Speed:</label>
+            <input type="range" id="speedSlider" min="0.1" max="5" value="1" step="0.1">
+            <span id="speedValue">1.0x</span>
+        </div>
+    </div>
+
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('solarSystemCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Control elements
+        const scaleSlider = document.getElementById('scaleSlider');
+        const speedSlider = document.getElementById('speedSlider');
+        const scaleValueDisplay = document.getElementById('scaleValue');
+        const speedValueDisplay = document.getElementById('speedValue');
+
+        // Initial control values
+        let userScale = parseFloat(scaleSlider.value);
+        let userSpeed = parseFloat(speedSlider.value);
+
+        // Sun properties
+        const sun = {
+            name: "Sun",
+            radius: 30, // Base radius
+            color: 'yellow'
+        };
+
+        // Planet properties: name, color, base radius, base orbit radius, base angular speed
+        const planets = [
+            { name: "Mercury", color: "#A9A9A9", radius: 3, orbitRadius: 60, baseSpeed: 0.042, angle: Math.random() * 2 * Math.PI },
+            { name: "Venus", color: "#FFA500", radius: 6, orbitRadius: 90, baseSpeed: 0.016, angle: Math.random() * 2 * Math.PI },
+            { name: "Earth", color: "#1E90FF", radius: 7, orbitRadius: 130, baseSpeed: 0.01, angle: Math.random() * 2 * Math.PI },
+            { name: "Mars", color: "#FF4500", radius: 4, orbitRadius: 180, baseSpeed: 0.0053, angle: Math.random() * 2 * Math.PI },
+            { name: "Jupiter", color: "#D2B48C", radius: 15, orbitRadius: 250, baseSpeed: 0.00084, angle: Math.random() * 2 * Math.PI },
+            { name: "Saturn", color: "#F0E68C", radius: 12, orbitRadius: 320, baseSpeed: 0.00034, angle: Math.random() * 2 * Math.PI, hasRings: true },
+            { name: "Uranus", color: "#ADD8E6", radius: 9, orbitRadius: 380, baseSpeed: 0.00012, angle: Math.random() * 2 * Math.PI },
+            { name: "Neptune", color: "#00008B", radius: 8, orbitRadius: 430, baseSpeed: 0.00006, angle: Math.random() * 2 * Math.PI }
+        ];
+
+        // Function to resize canvas
+        function resizeCanvas() {
+            const padding = 20; // Padding around the controls and header
+            const controlsHeight = document.querySelector('.controls').offsetHeight;
+            const headerHeight = document.querySelector('h1').offsetHeight;
+            const availableHeight = window.innerHeight - controlsHeight - headerHeight - padding * 3; // Extra padding
+            
+            const aspectRatio = 16 / 9; // Desired aspect ratio
+            let newWidth = window.innerWidth * 0.9; // Use 90% of window width
+            let newHeight = newWidth / aspectRatio;
+
+            if (newHeight > availableHeight) {
+                newHeight = availableHeight;
+                newWidth = newHeight * aspectRatio;
+            }
+            
+            canvas.width = Math.max(300, newWidth); // Minimum width
+            canvas.height = Math.max(200, newHeight); // Minimum height
+            
+            drawSolarSystem(); // Redraw after resize
+        }
+
+        // Function to draw the Sun
+        function drawSun(centerX, centerY) {
+            const currentSunRadius = sun.radius * userScale;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, currentSunRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = sun.color;
+            ctx.fill();
+            
+            // Sun's name
+            ctx.fillStyle = 'white';
+            ctx.font = `${Math.max(10, 12 * Math.sqrt(userScale))}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(sun.name, centerX, centerY);
+        }
+
+        // Function to draw a planet and its orbit
+        function drawPlanet(planet, centerX, centerY) {
+            const currentOrbitRadius = planet.orbitRadius * userScale;
+            const currentPlanetRadius = Math.max(1, planet.radius * userScale); // Ensure planet is at least 1px
+
+            // Calculate planet position
+            const planetX = centerX + currentOrbitRadius * Math.cos(planet.angle);
+            const planetY = centerY + currentOrbitRadius * Math.sin(planet.angle);
+
+            // Draw orbit path
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, currentOrbitRadius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)'; // Semi-transparent gray
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw planet
+            ctx.beginPath();
+            ctx.arc(planetX, planetY, currentPlanetRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = planet.color;
+            ctx.fill();
+
+            // Draw Saturn's rings if applicable
+            if (planet.hasRings) {
+                drawSaturnRings(planetX, planetY, currentPlanetRadius, planet.color);
+            }
+
+            // Draw planet name
+            // Adjust font size based on scale, but with min/max
+            const fontSize = Math.min(16, Math.max(8, 10 * Math.sqrt(userScale)));
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = `${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            // Offset name slightly above the planet
+            ctx.fillText(planet.name, planetX, planetY - currentPlanetRadius - (fontSize * 0.5));
+        }
+
+        // Function to draw Saturn's rings
+        function drawSaturnRings(planetX, planetY, planetRadius, color) {
+            const ringOuterRadiusX = planetRadius * 2.5;
+            const ringOuterRadiusY = planetRadius * 1.0; // Elliptical appearance
+            const ringInnerRadiusX = planetRadius * 1.8;
+            const ringInnerRadiusY = planetRadius * 0.7;
+
+            ctx.strokeStyle = LightenDarkenColor(color, 40); // Lighter shade of planet color
+            ctx.lineWidth = Math.max(1, 2 * userScale); // Ring thickness scales
+
+            // Outer ring
+            ctx.beginPath();
+            ctx.ellipse(planetX, planetY, ringOuterRadiusX, ringOuterRadiusY, 0.3, 0, 2 * Math.PI); // Tilt slightly
+            ctx.stroke();
+
+            // Inner part (gap, effectively) - could be drawn as a slightly darker ellipse or just let the background show
+            // For simplicity, we'll just draw the main visible ring part
+        }
+        
+        // Helper function to lighten/darken a color (for Saturn's rings)
+        function LightenDarkenColor(col, amt) {
+            let usePound = false;
+            if (col[0] === "#") {
+                col = col.slice(1);
+                usePound = true;
+            }
+            const num = parseInt(col, 16);
+            let r = (num >> 16) + amt;
+            if (r > 255) r = 255;
+            else if (r < 0) r = 0;
+            let b = ((num >> 8) & 0x00FF) + amt;
+            if (b > 255) b = 255;
+            else if (b < 0) b = 0;
+            let g = (num & 0x0000FF) + amt;
+            if (g > 255) g = 255;
+            else if (g < 0) g = 0;
+            return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+        }
+
+
+        // Function to update planet positions
+        function updatePositions() {
+            planets.forEach(planet => {
+                planet.angle += planet.baseSpeed * userSpeed;
+            });
+        }
+
+        // Main drawing function
+        function drawSolarSystem() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // Draw Sun
+            drawSun(centerX, centerY);
+
+            // Draw planets
+            planets.forEach(planet => {
+                drawPlanet(planet, centerX, centerY);
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            updatePositions();
+            drawSolarSystem();
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners for sliders
+        scaleSlider.addEventListener('input', (e) => {
+            userScale = parseFloat(e.target.value);
+            scaleValueDisplay.textContent = `${userScale.toFixed(2)}x`;
+            // No need to call drawSolarSystem here, animate loop handles it
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            userSpeed = parseFloat(e.target.value);
+            speedValueDisplay.textContent = `${userSpeed.toFixed(1)}x`;
+        });
+
+        // Initial setup
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Initialize display values
+        scaleValueDisplay.textContent = `${userScale.toFixed(2)}x`;
+        speedValueDisplay.textContent = `${userSpeed.toFixed(1)}x`;
+
+        resizeCanvas(); // Set initial canvas size and draw
+        animate(); // Start animation
+    </script>
+</body>
+</html>
